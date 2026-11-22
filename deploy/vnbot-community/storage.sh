@@ -47,6 +47,7 @@ secret_access_key = $secret
 endpoint = $endpoint
 region = auto
 no_check_bucket = true
+no_head = true
 CONFIG
   unset key secret
   for bucket in "$media" "$backup"; do
