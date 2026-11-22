@@ -4,7 +4,7 @@ set -euo pipefail
 umask 077
 forum=community.vnbot.run
 install_dir=/var/discourse
-seed_commit=0669aca77e40e93ce6435bcd0ca1932b63496d82
+seed_commit=5a3656280bcbad9df42eb18a99b08f5b5d365ff5
 if [[ $(id -u) != 0 || $(hostname -s) != ai-server01 ]]; then
   echo "Run on the dedicated ai-server01 console as root." >&2
   exit 1
