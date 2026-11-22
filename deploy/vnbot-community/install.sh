@@ -79,6 +79,16 @@ curl -fSsL --retry 2 "https://raw.githubusercontent.com/vifarmgo-lab/discourse/$
 git rev-parse HEAD > /var/discourse/vnbot-installer-revision
 ./launcher bootstrap app
 ./launcher start app
+# PostgreSQL, Redis and Rails may still be starting after the container is up.
+ready=0
+for ((i=0; i<90; i++)); do
+  if [[ $(curl -fsS --max-time 4 --resolve "$forum:443:127.0.0.1" "https://$forum/srv/status" 2>/dev/null) == ok ]]; then
+    ready=1
+    break
+  fi
+  sleep 4
+done
+[[ $ready == 1 ]] || { echo "HTTPS is not ready. Review the app logs before seeding categories."; exit 1; }
 docker cp "$seed" app:/tmp/vnbot-community-bootstrap.rb
 # docker cp preserves the root-owned host file mode. Grant read access inside the application container.
 docker exec app chmod 0644 /tmp/vnbot-community-bootstrap.rb
