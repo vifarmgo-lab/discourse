@@ -100,6 +100,8 @@ class VNBotCommunityBeta
 
     # Apply after data commits. Running again resumes if an option is unavailable.
     SETTINGS.each { |key, value| SiteSetting.public_send("#{key}=", value) unless SiteSetting.public_send(key) == value }
+    public_ids = @categories.values.reject(&:read_restricted).map(&:id).join("|")
+    SiteSetting.default_navigation_menu_categories = public_ids unless SiteSetting.default_navigation_menu_categories == public_ids
     horizon = Theme.find(Theme::CORE_THEMES.fetch("horizon"))
     horizon.set_default! unless horizon.default?
     puts "Beta categories: #{@categories.values.map(&:slug).join(', ')}"
