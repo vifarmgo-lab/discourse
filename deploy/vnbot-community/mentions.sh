@@ -2,7 +2,7 @@
 # Install the server-only plugin and verify application behavior before reloading web workers.
 set -euo pipefail
 [[ $(id -u) == 0 && $(hostname -s) == ai-server01 ]]
-ref=64f67a8555b66b9a55fc0d2197c779e953edb4db
+ref=0f911f61c78b619475e8cd3688409c54c19cd3a7
 base="https://raw.githubusercontent.com/vifarmgo-lab/discourse/$ref/deploy/vnbot-community/mentions"
 shared=/var/discourse/shared/standalone/vnbot-community
 root=/var/www/discourse/plugins/vnbot-community-mentions
