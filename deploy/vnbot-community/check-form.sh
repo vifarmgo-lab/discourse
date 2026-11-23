@@ -2,11 +2,13 @@
 # Read-only support check for the Community administrator's connection form.
 set -euo pipefail
 [[ $(hostname -s) == ai-server01 ]]
-docker exec -i -u discourse -w /var/www/discourse app bin/rails runner - <<'RUBY'
+docker exec -i -u discourse:www-data -w /var/www/discourse app bin/rails runner - <<'RUBY'
 m = VNBotCommunityMentions
 url = "https://community.vnbot.run"
 puts "canonical HTTPS origin matches: #{Discourse.base_url == url}"
 puts "credential saved: #{m.active?}"
+puts "web worker can read the endpoint: #{File.readable?(m::ENDPOINT)}"
+puts "web worker can write the endpoint: #{File.writable?(m::ENDPOINT)}"
 form = VnBotCommunityConnectionController.new
 form.set_response!(ActionDispatch::Response.new)
 form.send(:private_response)
@@ -18,7 +20,7 @@ Logster.store.latest(limit: 100).each do |entry|
   scoped = (trace + msg).include?("admin_connection.rb") || msg.include?("VnBotCommunityConnectionController") ||
     (Array.wrap(entry.env) + Array.wrap(entry.env_buffer)).any? { |e| e.is_a?(Hash) && e["REQUEST_URI"].to_s.split("?", 2).first == "/vnbot-community/connection" }
   next unless scoped
-  kind = msg[/\b(?:[A-Z][a-zA-Z0-9]*::)*[A-Z][a-zA-Z0-9]*(?:Error|Exception|InvalidAuthenticityToken)\b/]
+  kind = msg[/\bErrno::(?:EACCES|EPERM|ENOENT)\b/] || msg[/\b(?:[A-Z][a-zA-Z0-9]*::)*[A-Z][a-zA-Z0-9]*(?:Error|Exception|InvalidAuthenticityToken)\b/]
   frames = (trace + "\n" + msg).scan(/(?:admin_connection|application_controller|request_forgery_protection|plugin_store|controller|parameters|bridge)\.rb:\d+/).uniq.first(7)
   puts "form exception: #{kind || 'unspecified'}; frames: #{frames.join(', ')}"
 end
