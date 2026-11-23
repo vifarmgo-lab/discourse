@@ -15,6 +15,7 @@ ActiveRecord::Base.transaction do
   qa.save!(validate:false)
   topic = Topic.create!(title:"Kiểm tra nội bộ #{SecureRandom.hex(4)}", category:q, user:qa)
   question = Post.new(topic:topic,user:qa,post_number:1,raw:"@VNBot tóm tắt chủ đề kiểm thử này",cooked:'<p><a class="mention">@VNBot</a> tóm tắt chủ đề kiểm thử này</p>')
+  question.disable_rate_limits!
   question.save!(validate:false)
   assertion("public mention accepted",m.eligible?(question,m.bot))
   assertion("invalid callback rejected",m.accept(question.id,"0"*64,"demo") == 403)
@@ -26,6 +27,7 @@ ActiveRecord::Base.transaction do
   topic.update_column(:category_id,q.id)
   question.reload
   whisper = Post.new(topic:topic,user:qa,post_number:2,post_type:Post.types[:whisper],raw:"STAFF_TEST_DATA",cooked:"STAFF_TEST_DATA")
+  whisper.disable_rate_limits!
   whisper.save!(validate:false)
   assertion("whisper not a trigger",!m.eligible?(whisper,m.bot))
   question.update_column(:post_number,3)
