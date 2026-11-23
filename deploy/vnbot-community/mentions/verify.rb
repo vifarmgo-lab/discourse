@@ -52,6 +52,20 @@ ActiveRecord::Base.transaction do
     assertion("callback retry returns previous result",m.accept(question.id,tok,"Một lần nữa.") == 200)
   end
   assertion("live VIP is inaccessible to nonmembers",!qa.guardian.can_see?(vip))
+  if File.file?(m::ENDPOINT) && !File.file?(m::FILE)
+    stored_before = PluginStore.get(m::NS,"sealed_header")
+    begin
+      m.install_header("https://example.invalid/not-a-header")
+      raise "URL unexpectedly accepted as a header"
+    rescue ArgumentError
+    end
+    assertion("invalid input preserves the existing credentials", PluginStore.get(m::NS,"sealed_header") == stored_before)
+    sample = "Authorization: Bearer #{SecureRandom.hex(24)}"
+    m.install_header(sample)
+    _, name, val = m.config
+    assertion("encrypted header round-trip, no plaintext in stored setting",
+      "#{name}: #{val}" == sample && !PluginStore.get(m::NS,"sealed_header").include?(val))
+  end
   raise ActiveRecord::Rollback
 end
 puts "PASS: rollback complete; production users and posts unchanged by this test"
