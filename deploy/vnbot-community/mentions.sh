@@ -91,8 +91,10 @@ if cmd not in before:
     if not keep.exists(): shutil.copy2(p,keep); os.chmod(keep,0o600)
     os.replace(tmp,p)
 PY
-docker exec app sv restart unicorn || true
-if docker exec app test -d /etc/service/sidekiq; then docker exec app sv restart sidekiq || true; fi
+if [[ $previous != "releases/$ref" ]]; then
+  docker exec app sv restart unicorn || true
+  if docker exec app test -d /etc/service/sidekiq; then docker exec app sv restart sidekiq || true; fi
+fi
 for ((n=0;n<90;n++)); do
   if [[ $(curl -fsS --max-time 3 https://community.vnbot.run/srv/status 2>/dev/null || true) == ok ]]; then
     status=$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' --data '{"post_id":1,"answer":"probe"}' https://community.vnbot.run/vnbot-community/reply || true)
