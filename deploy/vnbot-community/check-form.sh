@@ -11,6 +11,17 @@ form = VnBotCommunityConnectionController.new
 form.set_response!(ActionDispatch::Response.new)
 form.send(:private_response)
 puts "form referrer policy: #{form.response.headers['Referrer-Policy']}"
+Logster.store.latest(limit: 100).each do |entry|
+  next unless entry.respond_to?(:message)
+  trace = Array(entry.backtrace).join("\n")
+  msg = entry.message.to_s
+  scoped = trace.include?("admin_connection.rb") || msg.include?("VnBotCommunityConnectionController") ||
+    Array.wrap(entry.env).any? { |e| e.is_a?(Hash) && e["REQUEST_URI"].to_s.split("?", 2).first == "/vnbot-community/connection" }
+  next unless scoped
+  kind = msg[/\b(?:[A-Z][a-zA-Z0-9]*::)*[A-Z][a-zA-Z0-9]*(?:Error|Exception|InvalidAuthenticityToken)\b/]
+  frames = (trace + "\n" + msg).scan(/(?:admin_connection|application_controller|request_forgery_protection|plugin_store|controller|parameters|bridge)\.rb:\d+/).uniq.first(7)
+  puts "form exception: #{kind || 'unspecified'}; frames: #{frames.join(', ')}"
+end
 RUBY
 python3 - <<'PY'
 from pathlib import Path
