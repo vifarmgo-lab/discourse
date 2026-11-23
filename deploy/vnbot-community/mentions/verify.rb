@@ -28,6 +28,8 @@ ActiveRecord::Base.transaction do
   whisper = Post.new(topic:topic,user:qa,post_number:2,post_type:Post.types[:whisper],raw:"STAFF_TEST_DATA",cooked:"STAFF_TEST_DATA")
   whisper.save!(validate:false)
   assertion("whisper not a trigger",!m.eligible?(whisper,m.bot))
+  question.update_column(:post_number,3)
+  question.reload
   b=m.payload(question)
   assertion("summary includes the question but no staff text",b[:question].include?("tóm tắt") && !b.to_json.include?("STAFF_TEST_DATA"))
   question.update_column(:cooked,"<p>VNBot trong văn bản thường</p>")
@@ -41,7 +43,8 @@ ActiveRecord::Base.transaction do
   topic.update_column(:category_id,klass.id)
   assertion("reply denied after category moves private",m.accept(question.id,tok,"Câu trả lời thử.") == 410)
   topic.update_column(:category_id,q.id)
-  # With no connection file, the production gate also rejects authentic callbacks.
+  # Simulate connection presence only inside this QA runner; dispatch never runs.
+  m.define_singleton_method(:active?) { true }
   if m.active?
     assertion("authentic reply written once",m.accept(question.id,tok,"Một câu trả lời thử nghiệm.") == 201)
     assertion("callback retry returns previous result",m.accept(question.id,tok,"Một lần nữa.") == 200)
