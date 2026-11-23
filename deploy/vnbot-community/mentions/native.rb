@@ -23,8 +23,12 @@ module VNBotCommunityNative
     Discourse.base_url == ORIGIN && get("enabled") == true
   end
 
+  def paired_hook
+    WebHook.find_by(id: get("hook_id"), payload_url: "#{ORIGIN}/vnbot-community/events", active: true)
+  end
+
   def eligible?(post)
-    return false unless Bridge.eligible?(post, Bridge.bot)
+    return false unless Bridge.eligible?(post, Bridge.bot) { |category| paired_hook&.categories&.exists?(category.id) }
     markup = Nokogiri::HTML5.fragment(post.cooked)
     markup.css("aside.quote,blockquote,pre,code").remove
     markup.css("a.mention").any? { |a| a["href"].to_s.casecmp?("/u/vnbot") && a.text.casecmp?("@vnbot") }
@@ -76,7 +80,7 @@ module VNBotCommunityNative
   end
 
   def signed_event?(raw, signature)
-    hook = WebHook.find_by(id: get("hook_id"), payload_url: "#{ORIGIN}/vnbot-community/events", active: true)
+    hook = paired_hook
     return false if !hook || hook.secret.blank? || !signature.match?(/\Asha256=[0-9a-f]{64}\z/)
     expected = "sha256=#{OpenSSL::HMAC.hexdigest('SHA256', hook.secret, raw)}"
     ActiveSupport::SecurityUtils.secure_compare(expected, signature)

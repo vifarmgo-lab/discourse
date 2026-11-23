@@ -8,8 +8,6 @@ m::Bridge.config
 der = ENV.fetch("COMMUNITY_PUBLIC_DER")
 key = OpenSSL::PKey.read(Base64.strict_decode64(der))
 raise "Workspace public Ed25519 key required" unless key.oid == "ED25519" && key.public_to_der == Base64.strict_decode64(der)
-categories = Category.where(slug: m::Bridge::ENABLED_CATEGORY_SLUGS).to_a
-raise "Expected both public categories" unless categories.size == 2 && categories.none?(&:read_restricted?)
 m::Bridge.locked(0) do
   pinned = m.get("workspace_public_der")
   raise "Workspace public key changed; review pairing" if pinned && pinned != der
@@ -28,9 +26,15 @@ m::Bridge.locked(0) do
   url = "#{m::ORIGIN}/vnbot-community/events"
   hook = m.get("hook_id") ? WebHook.find(m.get("hook_id")) : WebHook.new(payload_url: url)
   raise "Review existing webhook" if hook.payload_url != url || (hook.new_record? && WebHook.exists?(payload_url: url))
+  if hook.new_record?
+    defaults = m::Bridge::ENABLED_CATEGORY_SLUGS
+    categories = Category.where(slug: defaults).to_a
+    raise "Missing public default categories" unless categories.size == defaults.size && categories.none?(&:read_restricted?)
+    hook.categories = categories
+  end
   hook.secret = SecureRandom.hex(32) if hook.secret.blank?
   hook.assign_attributes(active: true, verify_certificate: true, wildcard_web_hook: false,
-                         categories: categories, web_hook_event_types: [WebHookEventType.find_by!(name: "post_created")])
+                         web_hook_event_types: [WebHookEventType.find_by!(name: "post_created")])
   hook.save!
   m.set("workspace_public_der", der)
   m.set("hook_id", hook.id)

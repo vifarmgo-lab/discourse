@@ -28,7 +28,18 @@ ActiveRecord::Base.transaction do
                       cooked:'<p><a class="mention" href="/u/vnbot">@VNBot</a> Tóm tắt bài kiểm tra.</p>')
   question.disable_rate_limits!
   question.save!(validate:false)
-  check("direct mention", m.eligible?(question))
+  check("empty webhook category list denies mentions", !m.eligible?(question))
+  hook.categories << general
+  check("direct mention in a selected category", m.eligible?(question))
+  news = Category.find_by!(slug: "ban-tin-ai")
+  topic.update_column(:category_id, news.id)
+  check("unselected public category denied", !m.eligible?(question.reload))
+  hook.categories << news
+  check("newly selected public category accepted", m.eligible?(question))
+  hook.categories.delete(news)
+  check("removing a category takes effect immediately", !m.eligible?(question))
+  topic.update_column(:category_id, general.id)
+  question.reload
   question.update_column(:cooked, "<blockquote>#{question.cooked}</blockquote>")
   check("quoted mention ignored", !m.eligible?(question.reload))
   question.update_column(:cooked, '<a class="mention" href="/u/vnbot">@VNBot</a> Hỏi một câu.')
@@ -38,7 +49,9 @@ ActiveRecord::Base.transaction do
   state["raw"] = "Đây là một câu trả lời mẫu để kiểm tra tính duy nhất."
   m.set("p#{question.id}", state)
   reply_opts = {topic:topic, user:b.bot, post_number:2, reply_to_post_number:1, raw:state["raw"], cooked:"<p>test</p>"}
-  topic.update_column(:category_id, Category.find_by!(slug:"vnbot-vip").id)
+  vip = Category.find_by!(slug:"vnbot-vip")
+  hook.categories << vip
+  topic.update_column(:category_id, vip.id)
   check("moved-to-private topic rejected", m.current_body(question.id, state).nil?)
   topic.update_column(:category_id, general.id)
   reply = Post.new(reply_opts)
