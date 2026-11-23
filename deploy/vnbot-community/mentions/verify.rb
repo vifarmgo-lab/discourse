@@ -7,6 +7,13 @@ def assertion(label, passed)
   raise "FAIL: #{label}" unless passed
   puts "PASS: #{label}"
 end
+# A browser navigating after a native form POST sends a null Origin under no-referrer.
+# The controller intentionally accepts only the forum's actual origin.
+connection_form = VnBotCommunityConnectionController.new
+connection_form.set_response!(ActionDispatch::Response.new)
+connection_form.send(:private_response)
+assertion("native admin form keeps its origin on same-site submission",
+  connection_form.response.headers["Referrer-Policy"] == "same-origin")
 ActiveRecord::Base.transaction do
   q = Category.find_by!(slug:m::PILOT)
   klass = Category.find_by!(slug:"lop-thu-nghiem")
