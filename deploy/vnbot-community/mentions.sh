@@ -28,9 +28,46 @@ restore_link() {
     rm -f "$shared/current"
   fi
 }
+# Unicorn runs as discourse:www-data and has no supplementary groups. Keep the
+# endpoint root-owned and grant its application UID read access even in that group.
+if [[ -f "$shared/mention-endpoint" ]]; then
+  service_uid=$(docker exec app id -u discourse)
+  python3 - "$shared/mention-endpoint" "$service_uid" <<'PY'
+import ctypes
+import os
+import stat
+import sys
+
+path, uid = sys.argv[1], int(sys.argv[2])
+if uid <= 0:
+    raise SystemExit("Invalid Discourse service UID")
+lib = ctypes.CDLL("libacl.so.1", use_errno=True)
+lib.acl_from_text.argtypes = [ctypes.c_char_p]
+lib.acl_from_text.restype = ctypes.c_void_p
+lib.acl_set_fd.argtypes = [ctypes.c_int, ctypes.c_void_p]
+lib.acl_free.argtypes = [ctypes.c_void_p]
+with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), "rb") as f:
+    st = os.fstat(f.fileno())
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != 0:
+        raise SystemExit("Expected a root-owned service endpoint")
+    acl = lib.acl_from_text(f"u::rw-,u:{uid}:r--,g::r--,m::r--,o::---".encode())
+    if not acl:
+        raise OSError(ctypes.get_errno(), "Cannot construct endpoint ACL")
+    try:
+        if lib.acl_set_fd(f.fileno(), acl) != 0:
+            raise OSError(ctypes.get_errno(), "Cannot set endpoint ACL")
+    finally:
+        lib.acl_free(acl)
+PY
+  docker exec -u discourse:www-data app test -r /shared/vnbot-community/mention-endpoint
+  if docker exec -u discourse:www-data app test -w /shared/vnbot-community/mention-endpoint; then
+    echo 'The web service should only have read access to the endpoint.' >&2
+    exit 1
+  fi
+fi
 ln -sfnT "releases/$ref" "$shared/current"
 docker exec app ln -sfnT /shared/vnbot-community/current "$root"
-runner=(docker exec -u discourse -w /var/www/discourse app bin/rails runner)
+runner=(docker exec -u discourse:www-data -w /var/www/discourse app bin/rails runner)
 if ! "${runner[@]}" "/shared/vnbot-community/releases/$ref/init.rb" ||
    ! "${runner[@]}" "/shared/vnbot-community/releases/$ref/verify.rb"; then
   restore_link
