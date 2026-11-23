@@ -15,8 +15,8 @@ Logster.store.latest(limit: 100).each do |entry|
   next unless entry.respond_to?(:message)
   trace = Array(entry.backtrace).join("\n")
   msg = entry.message.to_s
-  scoped = trace.include?("admin_connection.rb") || msg.include?("VnBotCommunityConnectionController") ||
-    Array.wrap(entry.env).any? { |e| e.is_a?(Hash) && e["REQUEST_URI"].to_s.split("?", 2).first == "/vnbot-community/connection" }
+  scoped = (trace + msg).include?("admin_connection.rb") || msg.include?("VnBotCommunityConnectionController") ||
+    (Array.wrap(entry.env) + Array.wrap(entry.env_buffer)).any? { |e| e.is_a?(Hash) && e["REQUEST_URI"].to_s.split("?", 2).first == "/vnbot-community/connection" }
   next unless scoped
   kind = msg[/\b(?:[A-Z][a-zA-Z0-9]*::)*[A-Z][a-zA-Z0-9]*(?:Error|Exception|InvalidAuthenticityToken)\b/]
   frames = (trace + "\n" + msg).scan(/(?:admin_connection|application_controller|request_forgery_protection|plugin_store|controller|parameters|bridge)\.rb:\d+/).uniq.first(7)
@@ -50,4 +50,25 @@ else:
                 records.append((stamp+']', req[1], code[1], route))
     for rec in records:
         print(*rec)
+root = Path('/var/discourse/shared/standalone/log')
+for file in [root/'rails/production.log',root/'rails/unicorn.stderr.log',root/'var-log/nginx/error.log',root/'rails/production_errors.log']:
+    if not file.is_file():
+        continue
+    with file.open('rb') as f:
+        f.seek(0,2)
+        f.seek(max(0, f.tell()-3000000))
+        rows=f.read().decode('utf-8','replace').splitlines()
+    hits=[i for i,row in enumerate(rows) if re.search(r'(?:Started POST "/vnbot-community/connection|VnBotCommunityConnectionController#update|admin_connection\.rb|POST /vnbot-community/connection HTTP)',row)]
+    print(file.name,'matched rows:',len(hits))
+    printed=set()
+    for i in hits[-8:]:
+        sample='\n'.join(rows[max(0,i-2):i+27])
+        kinds=re.findall(r'\b(?:[A-Z][A-Za-z0-9]+::)*[A-Z][A-Za-z0-9]*(?:Error|Exception|InvalidAuthenticityToken)\b',sample)
+        frames=re.findall(r'\b(?:admin_connection|application_controller|request_forgery_protection|plugin_store|bridge|parameters|controller)\.rb:\d+',sample)
+        reasons=[reason for reason in ['BAD CSRF','InvalidAuthenticityToken','Broken pipe','undefined method','Permission denied','ArgumentError','invalid byte sequence','Redis::ReadOnlyError','ReadOnlyError'] if reason in sample]
+        signature=(tuple(dict.fromkeys(kinds)),tuple(dict.fromkeys(frames))[:8],tuple(reasons))
+        if any(signature) and signature not in printed:
+            printed.add(signature)
+            print('exception / frames / indicators:', signature)
+
 PY
