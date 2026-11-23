@@ -25,6 +25,6 @@ fi
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p /usr/local/lib/vnbot-community
-base=https://raw.githubusercontent.com/vifarmgo-lab/discourse/5e8386bce168318d2cd14a94dd4cd7281dcf2e98/deploy/vnbot-community
+base=https://raw.githubusercontent.com/vifarmgo-lab/discourse/21bf372b4104bd4efb5df087b79929ada0166b03/deploy/vnbot-community
 curl -fsSL --retry 3 "$base/mentions.sh" -o "$work/update"
 bash "$work/update"
