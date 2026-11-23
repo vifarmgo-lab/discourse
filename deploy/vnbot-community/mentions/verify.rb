@@ -15,7 +15,8 @@ connection_form.send(:private_response)
 assertion("native admin form keeps its origin on same-site submission",
   connection_form.response.headers["Referrer-Policy"] == "same-origin")
 ActiveRecord::Base.transaction do
-  q = Category.find_by!(slug:m::PILOT)
+  q = Category.find_by!(slug:"hoi-dap-bao-loi")
+  general = Category.find_by!(slug:"chung")
   klass = Category.find_by!(slug:"lop-thu-nghiem")
   vip = Category.find_by!(slug:"vnbot-vip")
   qa = User.new(username:"qa#{SecureRandom.hex(4)}",email:"qa#{SecureRandom.hex(5)}@example.invalid",active:true,trust_level:1)
@@ -24,7 +25,9 @@ ActiveRecord::Base.transaction do
   question = Post.new(topic:topic,user:qa,post_number:1,raw:"@VNBot tóm tắt chủ đề kiểm thử này",cooked:'<p><a class="mention">@VNBot</a> tóm tắt chủ đề kiểm thử này</p>')
   question.disable_rate_limits!
   question.save!(validate:false)
-  assertion("public mention accepted",m.eligible?(question,m.bot))
+  assertion("public Q&A mention accepted",m.eligible?(question,m.bot))
+  topic.update_column(:category_id, general.id)
+  assertion("public General mention accepted",m.eligible?(question.reload,m.bot))
   assertion("invalid callback rejected",m.accept(question.id,"0"*64,"demo") == 403)
   [klass,vip].each do |private_room|
     topic.update_column(:category_id,private_room.id)
