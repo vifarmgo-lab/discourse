@@ -12,7 +12,14 @@ module VNBotCommunityMentions
   SCHEMA = "vnbot.community.mention.v1"
   TTL = 45.minutes
   def config
-    data = JSON.parse(File.read(FILE))
+    data = if File.file?(FILE)
+      JSON.parse(File.read(FILE))
+    else
+      from_admin_form
+    end
+    validate_connection(data)
+  end
+  def validate_connection(data)
     url = URI.parse(data.fetch("url"))
     raise "Invalid VNBot URL" unless url.is_a?(URI::HTTPS) && url.port == 443 && url.userinfo.nil? &&
       url.host.to_s.match?(/\A(?:[a-z0-9-]+\.)*vnbot\.run\z/i) && url.fragment.nil?
@@ -23,7 +30,7 @@ module VNBotCommunityMentions
     [url, key, value]
   end
   def active?
-    Discourse.current_hostname == "community.vnbot.run" && File.file?(FILE)
+    Discourse.current_hostname == "community.vnbot.run" && (File.file?(FILE) || (File.file?(ENDPOINT) && PluginStore.get(NS, "sealed_header").present?))
   end
   def bot
     id = PluginStore.get(NS, "bot_id")
