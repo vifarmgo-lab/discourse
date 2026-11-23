@@ -8,7 +8,7 @@ module VNBotCommunityMentions
   extend self
   NS = "vnbot_community_mentions_v1"
   FILE = "/shared/vnbot-community/mention-connection.json"
-  PILOT = "hoi-dap-bao-loi"
+  ENABLED_CATEGORY_SLUGS = %w[hoi-dap-bao-loi chung].freeze
   SCHEMA = "vnbot.community.mention.v1"
   TTL = 45.minutes
   def config
@@ -42,7 +42,7 @@ module VNBotCommunityMentions
       post.post_type == Post.types[:regular] && !post.hidden? && !post.deleted_at && !post.user.suspended?
     topic = post.topic
     return false unless topic && topic.archetype == Archetype.default && topic.visible? && !topic.deleted_at &&
-      !topic.closed? && !topic.archived? && topic.category&.slug == PILOT && !topic.category.read_restricted?
+      !topic.closed? && !topic.archived? && ENABLED_CATEGORY_SLUGS.include?(topic.category&.slug) && !topic.category.read_restricted?
     return false if topic.category.topic_id == topic.id
     [Guardian.new, bot_user.guardian, post.user.guardian].all? { |g| g.can_see?(topic) && g.can_see?(post) } &&
       bot_user.guardian.can_create_post_on_topic?(topic) &&
