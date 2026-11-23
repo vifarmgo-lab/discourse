@@ -107,6 +107,7 @@ module VNBotCommunityMentions
     Digest::SHA256.hexdigest(JSON.generate(body))
   end
   def dispatch(id)
+    return if VNBotCommunityNative.enabled?
     return unless active?
     url,key,value = config
     packet = locked(id) do
@@ -150,6 +151,7 @@ module VNBotCommunityMentions
   end
   def accept(id, provided, answer)
     locked(id) do
+      next 410 if VNBotCommunityNative.enabled?
       s = state(id)
       next 403 unless s && provided.match?(/\A[a-f0-9]{64}\z/) && ActiveSupport::SecurityUtils.secure_compare(provided,token(id,s))
       next 200 if s["reply_id"]
