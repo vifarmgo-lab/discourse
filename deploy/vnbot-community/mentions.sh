@@ -2,7 +2,7 @@
 # Install the server-only plugin and verify application behavior before reloading web workers.
 set -euo pipefail
 [[ $(id -u) == 0 && $(hostname -s) == ai-server01 ]]
-ref=802c34f40bfccbfb1ae246670c66577275458af2
+ref=010bf2ba5f7a354acddddc983901615056bf5233
 base="https://raw.githubusercontent.com/vifarmgo-lab/discourse/$ref/deploy/vnbot-community/mentions"
 shared=/var/discourse/shared/standalone/vnbot-community
 root=/var/www/discourse/plugins/vnbot-community-mentions
@@ -12,7 +12,7 @@ trap 'rm -rf -- "$scratch"' EXIT
 install -d -m 0755 "$shared" "$shared/releases"
 release="$shared/releases/$ref"
 install -d -m 0755 "$release"
-for file in plugin.rb bridge.rb init.rb verify.rb; do
+for file in plugin.rb bridge.rb admin_connection.rb init.rb verify.rb; do
   curl -fsSL --retry 3 "$base/$file" -o "$scratch/$file"
   install -m 0644 "$scratch/$file" "$release/$file"
   docker exec app ruby -c "/shared/vnbot-community/releases/$ref/$file" >/dev/null
