@@ -28,8 +28,12 @@ ActiveRecord::Base.transaction do
   room=Category.find_by!(slug:"da-lam-voi-vnbot")
   flows=[]
   4.times do |n|
-    t=Topic.create!(title:"Bài kiểm thử #{SecureRandom.hex(6)}",user:a,category:room,archetype:"regular")
-    Post.create!(topic:t,user:a,post_number:1,raw:"Hướng dẫn mẫu và đầu ra minh chứng cho lộ trình.",cooked:"<p>Demo</p>")
+    t=Topic.new(title:"Bài kiểm thử #{SecureRandom.hex(6)}",user:a,category:room,archetype:"regular")
+    t.disable_rate_limits!
+    t.save!
+    post=Post.new(topic:t,user:a,post_number:1,raw:"Hướng dẫn mẫu và đầu ra minh chứng cho lộ trình.",cooked:"<p>Demo</p>")
+    post.disable_rate_limits!
+    post.save!
     submit(a,"flow",url:"/t/#{t.id}",area:"Sales",note:"Hướng dẫn và demo có thể làm lại")
     f=VnRank::Entry.find_by!(kind:"flow",user_id:a.id,topic_id:t.id)
     submit(staff,"approve",id:f.id)
