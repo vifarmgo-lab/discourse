@@ -10,7 +10,7 @@ release=/shared/vnbot-ranks/releases/$ref
 plugin=/var/www/discourse/plugins/vnbot-community-ranks
 repo=https://raw.githubusercontent.com/vifarmgo-lab/discourse/$ref/deploy/vnbot-community/ranks
 files=(plugin.rb controller.rb program.rb publish.rb verify.rb schema.rb navigation.js style.css views/rank/index.html.erb)
-mkdir -p "$base/releases"
+install -d -m 0755 "$base" "$base/releases"
 stage=$(mktemp -d "$base/releases/.stage.XXXXXXXX")
 old=$(readlink "$base/current" || true)
 linked=0
@@ -66,14 +66,18 @@ if docker exec app test -e "$plugin" || docker exec app test -L "$plugin"; then
 else
   linked=1
 fi
-run=(docker exec -u discourse -w /var/www/discourse app bin/rails runner)
+run=(docker exec -u discourse:www-data -w /var/www/discourse app bin/rails runner)
+docker exec -u discourse:www-data app test -r "$release/schema.rb"
 echo "Checking schema"
 "${run[@]}" "$release/schema.rb"
 switched=1
 ln -sfnT "releases/$ref" "$base/current"
 if ((linked)); then docker exec app ln -s /shared/vnbot-ranks/current "$plugin"; fi
 echo "Testing progression and routes before web restart"
-"${run[@]}" "$release/verify.rb"
+if ! "${run[@]}" "$release/verify.rb" > "$base/.verify-log" 2>&1; then
+  head -n 12 "$base/.verify-log"; exit 1
+fi
+cat "$base/.verify-log"
 if ! grep -Fqx "$hook" "$config"; then hook_edit add; hookadded=1; fi
 reload=1
 docker exec app sv -w 90 restart unicorn
