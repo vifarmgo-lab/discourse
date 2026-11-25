@@ -18,9 +18,6 @@ class VnRankController < ::ApplicationController
   def actions(kind, id=nil)
     {kind:kind,id:id,tab:@tab,focus:params[:topic]}.compact
   end
-  def navigation
-    render plain: File.read(File.join(__dir__,"navigation.js")), content_type:"application/javascript"
-  end
   def style
     render plain: File.read(File.join(__dir__,"style.css")), content_type:"text/css"
   end

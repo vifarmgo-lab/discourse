@@ -101,6 +101,10 @@ ActiveRecord::Base.transaction do
   app=ActionDispatch::Integration::Session.new(Rails.application)
   app.host! Discourse.current_hostname
   app.https!
+  app.get "/latest", headers: { "HTTP_USER_AGENT" => "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36" }
+  html=Nokogiri::HTML(app.response.body)
+  script=html.at_css("script#vnbot-rank-navigation")
+  assert_rank(app.response.status==200 && script && script["nonce"].present? && script.content.include?("Lộ trình chuyên gia"), "homepage navigation with CSP nonce")
   %w[start trials verified directory events].each do |tab|
     app.get "/lo-trinh",params:{tab:tab}
     assert_rank(app.response.status==200 && app.response.body.include?("Lộ trình chuyên gia"),"guest GET #{tab}: #{app.response.status}")
