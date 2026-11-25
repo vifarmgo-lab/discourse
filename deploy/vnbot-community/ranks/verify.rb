@@ -52,12 +52,13 @@ ActiveRecord::Base.transaction do
   end
   def award(u,staff)
     i=VnRank.level(u)
-    submit(u,"rank")
+    submit(u,"rank",consent:"yes")
     row=VnRank::Entry.find_by!(kind:"rank",user_id:u.id,entry_key:i.to_s)
     submit(staff,"approve",id:row.id)
     submit(staff,"approve",id:row.id)
     assert_rank(VnRank.level(u)==i+1,"sequential award")
   end
+  assert_rank(VnRank.next_step(b, 0, VnRank.stats(b)).last=="#flow","Newbie has an actionable first step")
   award(a,staff)
   assert_rank(VnRank.portfolio.where(user_id:a.id).count==2,"verified portfolio")
   [b,c,d].each do |peer|
@@ -97,6 +98,49 @@ ActiveRecord::Base.transaction do
   must_deny{submit(b,"apply",id:brief.id,note:"Đề xuất thử")}
   submit(a,"apply",id:brief.id,note:"Cách phối hợp triển khai")
   assert_rank(!GroupUser.exists?(user_id:a.id,group_id:Group.find_by!(name:"vnbot_vip").id),"VIP remains independent")
+  assert_rank(!VnRank.council?(a),"Guru has no council seat")
+  must_deny { submit(a, "proposal", **common) }
+  must_deny { submit(b, "adoption") }
+  reviewer = sample_user(admin: true)
+  note = "Đã đối chiếu vai trò chủ trì và hoạt động thực tế"
+  [b,c].each do |peer|
+    must_deny { submit(a,"mentor_master", peer:peer.username, note:note) }
+    BadgeGranter.grant(VnRank.badge(1),peer,granted_by:staff)
+    submit(a,"mentor_master",peer:peer.username,note:note)
+    row=VnRank::Entry.find_by!(kind:"mentor_master",user_id:a.id,peer_id:peer.id)
+    submit(peer,"confirm",id:row.id)
+    submit(staff,"approve",id:row.id)
+  end
+  proof = {peer:b.username, url:"/t/#{flows[0].topic_id}", team:"Đội A", note:note, start:(Date.current-89).iso8601}
+  must_deny { submit(a,"adoption",**proof) }
+  [[0,b,"Đội A"],[0,c,"Đội B"],[1,d,"Đội C"],[0,b," Đội   A "],[0,d,"Đội C"]].each_with_index do |(index,peer,team),i|
+    submit(a,"adoption",**proof.merge(peer:peer.username,url:"/t/#{flows[index].topic_id}",team:team,start:(Date.current-90).iso8601))
+    row=VnRank::Entry.find_by!(kind:"adoption",user_id:a.id,topic_id:flows[index].topic_id,peer_id:peer.id)
+    submit(peer,"confirm",id:row.id)
+    submit(staff,"approve",id:row.id)
+    assert_rank(!VnRank.qualifies?(a,3),"mixed initiatives and duplicate teams excluded") if i<4
+  end
+  must_deny { submit(a,"rank") }
+  submit(a,"rank",consent:"yes")
+  row=VnRank::Entry.find_by!(kind:"rank",user_id:a.id,entry_key:"3")
+  must_deny { submit(staff,"approve",id:row.id) }
+  must_deny { submit(b,"advice",id:row.id,note:note) }
+  submit(staff,"advice",id:row.id,note:note)
+  must_deny { submit(staff,"approve",id:row.id) }
+  submit(reviewer,"advice",id:row.id,note:note)
+  submit(staff,"reject",id:row.id)
+  submit(a,"rank",consent:"yes")
+  must_deny { submit(staff,"approve",id:row.id) }
+  submit(reviewer,"advice",id:row.id,note:note)
+  submit(staff,"approve",id:row.id)
+  assert_rank(VnRank.level(a)==4 && VnRank.council?(a) && !a.reload.staff?, "Legendary advisory seat without staff permissions")
+  submit(a,"proposal",title:"Sáng kiến chung",area:"Hợp tác kinh doanh",note:note)
+  prop=VnRank::Entry.find_by!(kind:"proposal",user_id:a.id)
+  must_deny { submit(a,"response",id:prop.id,note:note) }
+  must_deny { submit(a,"approve",id:prop.id) }
+  submit(staff,"response",id:prop.id,note:note)
+  assert_rank(prop.reload.details["response"]==note && prop.details["quarter"]==VnRank.quarter,"quarterly council and AIKING reply")
+  assert_rank(!GroupUser.exists?(user_id:a.id,group_id:Group.find_by!(name:"vnbot_vip").id),"Legendary does not confer VIP")
   # Exercise actual routes and templates under isolated local request sessions.
   app=ActionDispatch::Integration::Session.new(Rails.application)
   app.host! Discourse.current_hostname
@@ -109,10 +153,29 @@ ActiveRecord::Base.transaction do
     app.get "/lo-trinh",params:{tab:tab}
     assert_rank(app.response.status==200 && app.response.body.include?("Lộ trình chuyên gia"),"guest GET #{tab}: #{app.response.status}")
   end
+  app.get "/lo-trinh"
+  levels=Nokogiri::HTML(app.response.body).css(".levels h2").map(&:text)
+  assert_rank(levels == ["Cấp 1 · Newbie","Cấp 2 · Expert","Cấp 3 · Master","Cấp 4 · Guru","Cấp 5 · Legendary"],"five tiers in order")
+  app.get "/lo-trinh",params:{tab:"council"}
+  assert_rank([302,403,404].include?(app.response.status),"private council")
   app.get "/lo-trinh",params:{tab:"briefs"}
   assert_rank([302,403,404].include?(app.response.status),"private briefs")
   app.get "/lo-trinh/spotlight",params:{topic:flows.first.topic_id}
   assert_rank(JSON.parse(app.response.body)["eligible"]==true,"post action discovery")
-  puts "PASS four independent workflows, distinct testers, three ranks, human review, workshop enrollment, Guru brief, VIP isolation and public web routes"
+  [[a, "council", "Chương trình nghị sự"], [a, "me", "Cấp 5 · Legendary"], [b, "me", "Tiến tới Guru"], [staff, "review", "Hồ sơ chờ duyệt"]].each do |user,tab,marker|
+    signed = ActionDispatch::Integration::Session.new(Rails.application)
+    signed.host! Discourse.current_hostname
+    signed.https!
+    # This session belongs to a synthetic account in the rolled-back transaction.
+    session_token = UserAuthToken.generate!(user_id: user.id, client_ip: "127.0.0.1")
+    signed.cookies[Auth::DefaultCurrentUserProvider::TOKEN_COOKIE] = session_token.unhashed_auth_token
+    signed.get "/lo-trinh", params: {tab: tab}
+    assert_rank(signed.response.status==200 && signed.response.body.include?(marker), "signed-in #{tab} #{signed.response.status}")
+    if user == b
+      signed.get "/lo-trinh", params: {tab: "council"}
+      assert_rank([302,403,404].include?(signed.response.status), "lower rank cannot enter council")
+    end
+  end
+  puts "PASS five tiers; four sequential awards; 89/90 days; distinct teams on the same initiative; independent council review and resubmission; advisory agenda; staff and VIP isolation; routes"
   raise ActiveRecord::Rollback
 end

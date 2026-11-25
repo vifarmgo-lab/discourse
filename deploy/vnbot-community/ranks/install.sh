@@ -83,7 +83,7 @@ reload=1
 docker exec app sv -w 90 restart unicorn
 seen=0
 for attempt in {1..30}; do
-  if curl -fsS --max-time 5 https://community.vnbot.run/lo-trinh -o "$base/.rank-health" 2>/dev/null && grep -Fq 'Lộ trình chuyên gia' "$base/.rank-health"; then seen=1; break; fi
+  if curl -fsS --max-time 5 https://community.vnbot.run/lo-trinh -o "$base/.rank-health" 2>/dev/null && grep -Fq 'Cấp 5 · Legendary' "$base/.rank-health"; then seen=1; break; fi
   sleep 2
 done
 [[ $seen == 1 ]] || { echo 'Public rank page did not pass'; exit 1; }

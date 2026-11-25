@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 # name: vnbot-community-ranks
 # about: Verified workflows, mentorship, and opportunities in VNBot Community
-# version: 1.0
+# version: 1.1
 # authors: AIKING
 
 navigation = File.read(File.expand_path("navigation.js", __dir__)).html_safe

@@ -4,10 +4,11 @@ class VnRankController < ::ApplicationController
   skip_before_action :check_xhr, :preload_json
   before_action :ensure_logged_in, only: :update
   helper_method :kind_label, :state_label, :actions, :current_user, :reg_link
-  TABS = %w[start me trials verified directory events briefs review member].freeze
+  TABS = %w[start me trials verified directory events briefs council review member].freeze
   KINDS = {"flow"=>"Giải pháp", "trial"=>"Dùng thử", "coach"=>"Hướng dẫn triển khai", "impact"=>"Kết quả trước/sau",
     "team"=>"Đội đã vận hành", "mentor"=>"Dìu dắt Expert", "rank"=>"Xét danh hiệu", "workshop"=>"Buổi thực hành",
-    "brief"=>"Đề bài doanh nghiệp", "join"=>"Đăng ký buổi thực hành", "apply"=>"Đề xuất hợp tác"}.freeze
+    "mentor_master"=>"Dìu dắt Master", "adoption"=>"Đội dùng sáng kiến 90 ngày", "proposal"=>"Đề xuất Hội đồng",
+    "advice"=>"Ý kiến xét hạng", "response"=>"Phản hồi của AIKING", "brief"=>"Đề bài doanh nghiệp", "join"=>"Đăng ký buổi thực hành", "apply"=>"Đề xuất hợp tác"}.freeze
   STATES = {"trying"=>"Đang thử","blocked"=>"Gặp vướng mắc","approved"=>"Đã xác nhận","pending"=>"Chờ duyệt",
     "confirm"=>"Chờ người liên quan xác nhận","rejected"=>"Cần bổ sung"}.freeze
   def kind_label(k) = KINDS.fetch(k,k)
@@ -33,7 +34,12 @@ class VnRankController < ::ApplicationController
     case @tab
     when "me"
       @stats=VnRank.stats(@actor)
-      @ready=@level<3 && VnRank.qualifies?(@actor,@level)
+      if @level < VnRank::TARGETS.size
+        @next_step = VnRank.next_step(@actor, @level, @stats)
+        @pending_rank = data.exists?(kind: "rank", user_id: @actor.id, entry_key: @level.to_s, state: "pending")
+      end
+      @adoptions = data.accepted.where(kind: "adoption", user_id: @actor.id, topic_id: VnRank.flows.where(user_id: @actor.id).select(:topic_id))
+        .includes(:topic).group_by(&:topic) if @level == 3
       @mine=data.where(user_id:@actor.id).order(updated_at: :desc).limit(100)
       @confirm=data.where(peer_id:@actor.id,state:"confirm").order(:id)
       @feedback=data.where(kind:"trial",parent_id:VnRank.flows.where(user_id:@actor.id).select(:id),state:%w[approved blocked]).includes(:user).order(updated_at: :desc).limit(60)
@@ -62,6 +68,11 @@ class VnRankController < ::ApplicationController
       @briefs=data.accepted.where(kind:"brief").where("details->>'date' >= ?",Date.current.iso8601).order(id: :desc)
       offers=data.where(kind:"apply",parent_id:@briefs.select(:id))
       @offers=(@actor.staff? ? offers : offers.where(user_id:@actor.id)).includes(:user).group_by(&:parent_id)
+    when "council"
+      raise Discourse::InvalidAccess unless VnRank.council?(@actor)
+      @proposals = data.accepted.where(kind: "proposal").includes(:user).order(id: :desc)
+      @rank_cases = data.where(kind: "rank", state: "pending").where("details->>'council' = 'true'").includes(:user).order(:id)
+      @advice = data.accepted.where(kind: "advice", parent_id: @rank_cases.select(:id)).includes(:user).group_by(&:parent_id)
     when "review"
       @queue=data.where(state:"pending").includes(:user).order(:id).limit(100)
     end
